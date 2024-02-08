@@ -1,0 +1,49 @@
+Connect-MgGraph -NoWelcome -Scopes "User.ReadWrite.All","Group.ReadWrite.All"
+
+# Define the group ID
+$groupId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Get all members of the specific group
+$groupMembers = Get-MGGroupMember -GroupId $groupId -All
+$totalMembers = $groupMembers.Count
+Write-Output "Total members in group: $totalMembers"
+
+# Initialize a list to hold IDs of users with non-'None' password policies
+$filteredUserIds = @()
+
+# Loop through each member
+foreach ($member in $groupMembers) {
+    if ($member['@odata.type'] -eq '#microsoft.graph.user') {
+        # Get user details
+        $user = Get-MGUser -UserId $member.Id -Property "Id, PasswordPolicies"
+
+        # Check if the user's password policy is not 'None' or blank
+        if (-not [string]::IsNullOrWhiteSpace($user.PasswordPolicies) -and $user.PasswordPolicies -ne "None") {
+            $filteredUserIds += $user.Id
+        }
+    }
+}
+
+# Display the total number of users after filtering
+$totalFilteredUsers = $filteredUserIds.Count
+Write-Output "Total filtered users: $totalFilteredUsers"
+
+# Check if there are filtered users to update
+if ($totalFilteredUsers -eq 0) {
+    Write-Output "No users with non-'None' password policies. There is nothing to update."
+    return
+}
+
+# Optional: Update the PasswordPolicies of filtered users
+$shouldUpdate = Read-Host "Do you want to update the PasswordPolicies of filtered users to 'None'? (Y/N)"
+if ($shouldUpdate -eq "Y") {
+    foreach ($userId in $filteredUserIds) {
+        Update-MgUser -UserId $userId -PasswordPolicies "None"
+        Write-Output "Updated PasswordPolicies for User ID: $userId"
+
+        # Wait for xx seconds before processing the next user
+        Start-Sleep -Seconds 10
+    }
+} else {
+    Write-Output "Update operation cancelled."
+}
